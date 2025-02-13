@@ -109,3 +109,21 @@ func HandlerReset(s *State, cmd Command) error {
 	fmt.Println("Database reset successfully!")
 	return nil
 }
+
+func HandlerUsers(s *State, cmd Command) error {
+	users, err := s.DB.GetUsers(context.Background())
+	if err != nil {
+		return fmt.Errorf("failed to get users: %w", err)
+	}
+
+	current := s.Config.CurrentUserName
+
+	for _, u := range users {
+		if u.Name == current {
+			fmt.Printf("* %s (current)\n", u.Name)
+		} else {
+			fmt.Printf("* %s\n", u.Name)
+		}
+	}
+	return nil
+}
