@@ -100,3 +100,12 @@ func HandlerLogin(s *State, cmd Command) error {
 	fmt.Printf("Logged in as %s. User data: %+v\n", username, user)
 	return nil
 }
+
+func HandlerReset(s *State, cmd Command) error {
+	err := s.DB.ResetUsers(context.Background())
+	if err != nil {
+		return fmt.Errorf("failed to reset database: %w", err)
+	}
+	fmt.Println("Database reset successfully!")
+	return nil
+}
