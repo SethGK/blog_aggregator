@@ -140,3 +140,36 @@ func HandlerAgg(s *State, cmd Command) error {
 	fmt.Printf("%+v\n", feed)
 	return nil
 }
+
+func HandlerAddFeed(s *State, cmd Command) error {
+	if len(cmd.Args) < 2 {
+		return errors.New("feed name and URL are required")
+	}
+
+	feedName := cmd.Args[0]
+	feedURL := cmd.Args[1]
+
+	user, err := s.DB.GetUser(context.Background(), s.Config.CurrentUserName)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return fmt.Errorf("current user %s not found", s.Config.CurrentUserName)
+		}
+		return err
+	}
+
+	now := time.Now()
+	newFeed, err := s.DB.CreateFeed(context.Background(), database.CreateFeedParams{
+		ID:        uuid.New(),
+		CreatedAt: now,
+		UpdatedAt: now,
+		Name:      feedName,
+		Url:       feedURL,
+		UserID:    user.ID,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create feed: %w", err)
+	}
+
+	fmt.Printf("Feed created successfully: %+v\n", newFeed)
+	return nil
+}
