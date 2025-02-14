@@ -173,3 +173,20 @@ func HandlerAddFeed(s *State, cmd Command) error {
 	fmt.Printf("Feed created successfully: %+v\n", newFeed)
 	return nil
 }
+
+func HandlerFeeds(s *State, cmd Command) error {
+	feeds, err := s.DB.GetAllFeeds(context.Background())
+	if err != nil {
+		return fmt.Errorf("failed to get feeds: %w", err)
+	}
+
+	if len(feeds) == 0 {
+		fmt.Println("No feeds found.")
+		return nil
+	}
+
+	for _, feed := range feeds {
+		fmt.Printf("Feed: %s\nURL: %s\nCreated by: %s\n\n", feed.FeedName, feed.Url, feed.UserName)
+	}
+	return nil
+}
