@@ -170,6 +170,17 @@ func HandlerAddFeed(s *State, cmd Command) error {
 		return fmt.Errorf("failed to create feed: %w", err)
 	}
 
+	_, err = s.DB.CreateFeedFollow(context.Background(), database.CreateFeedFollowParams{
+		ID:        uuid.New(),
+		CreatedAt: now,
+		UpdatedAt: now,
+		UserID:    user.ID,
+		FeedID:    newFeed.ID,
+	})
+	if err != nil {
+		return fmt.Errorf("failed tot automatically follow feed: %w", err)
+	}
+
 	fmt.Printf("Feed created successfully: %+v\n", newFeed)
 	return nil
 }
@@ -187,6 +198,61 @@ func HandlerFeeds(s *State, cmd Command) error {
 
 	for _, feed := range feeds {
 		fmt.Printf("Feed: %s\nURL: %s\nCreated by: %s\n\n", feed.FeedName, feed.Url, feed.UserName)
+	}
+	return nil
+}
+
+func HandlerFollow(s *State, cmd Command) error {
+	if len(cmd.Args) < 1 {
+		return errors.New("feed URL is required")
+	}
+	feedURL := cmd.Args[0]
+
+	feed, err := s.DB.GetFeedByURL(context.Background(), feedURL)
+	if err != nil {
+		return fmt.Errorf("failed to find feed with URL %s: %w", feedURL, err)
+	}
+
+	user, err := s.DB.GetUser(context.Background(), s.Config.CurrentUserName)
+	if err != nil {
+		return fmt.Errorf("current user not found: %w", err)
+	}
+
+	now := time.Now()
+	follow, err := s.DB.CreateFeedFollow(context.Background(), database.CreateFeedFollowParams{
+		ID:        uuid.New(),
+		CreatedAt: now,
+		UpdatedAt: now,
+		UserID:    user.ID,
+		FeedID:    feed.ID,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to follow feed: %w", err)
+	}
+
+	fmt.Printf("User %s now follows feed %s\n", follow.UserName, follow.FeedName)
+	return nil
+}
+
+func HandlerFollowing(s *State, cmd Command) error {
+	user, err := s.DB.GetUser(context.Background(), s.Config.CurrentUserName)
+	if err != nil {
+		return fmt.Errorf("current user not found: %w", err)
+	}
+
+	follows, err := s.DB.GetFeedFollowsForUser(context.Background(), user.ID)
+	if err != nil {
+		return fmt.Errorf("failed to get feed follows: %w", err)
+	}
+
+	if len(follows) == 0 {
+		fmt.Println("No feed follows found.")
+		return nil
+	}
+
+	fmt.Println("Following:")
+	for _, ff := range follows {
+		fmt.Printf("- %s\n", ff.FeedName)
 	}
 	return nil
 }
