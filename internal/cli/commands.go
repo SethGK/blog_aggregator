@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"gator/internal/aggregator"
 	"gator/internal/config"
 	"gator/internal/database"
 
@@ -125,5 +126,17 @@ func HandlerUsers(s *State, cmd Command) error {
 			fmt.Printf("* %s\n", u.Name)
 		}
 	}
+	return nil
+}
+
+func HandlerAgg(s *State, cmd Command) error {
+	feedURL := "https://www.wagslane.dev/index.xml"
+
+	feed, err := aggregator.FetchFeed(context.Background(), feedURL)
+	if err != nil {
+		return fmt.Errorf("failed to fetch RSS feed: %w", err)
+	}
+
+	fmt.Printf("%+v\n", feed)
 	return nil
 }
