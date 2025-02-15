@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"gator/internal/aggregator"
@@ -12,6 +13,7 @@ import (
 	"gator/internal/database"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 )
 
 type State struct {
@@ -291,7 +293,7 @@ func scrapeFeeds(s *State) error {
 	}
 
 	if err := s.DB.MarkedFeedFetched(ctx, feed.ID); err != nil {
-		return fmt.Errorf("failed tot mark feed fetched: %w", err)
+		return fmt.Errorf("failed to mark feed fetched: %w", err)
 	}
 
 	rssFeed, err := aggregator.FetchFeed(ctx, feed.Url)
@@ -299,9 +301,67 @@ func scrapeFeeds(s *State) error {
 		return fmt.Errorf("failed to fetch feed: %w", err)
 	}
 
-	fmt.Printf("Feed: %s\n", feed.Name)
+	now := time.Now()
 	for _, item := range rssFeed.Channel.Item {
-		fmt.Printf(" - %s\n", item.Title)
+		var publishedAt time.Time
+		if item.PubDate != "" {
+			publishedAt, err = time.Parse(time.RFC1123, item.PubDate)
+			if err != nil {
+				publishedAt, err = time.Parse(time.RFC1123Z, item.PubDate)
+				if err != nil {
+					publishedAt = time.Time{}
+				}
+			}
+		}
+
+		err = s.DB.CreatePost(ctx, database.CreatePostParams{
+			ID:          uuid.New(),
+			CreatedAt:   now,
+			UpdatedAt:   now,
+			Title:       item.Title,
+			Url:         item.Link,
+			Description: sql.NullString{String: item.Description, Valid: item.Description != ""},
+			PublishedAt: sql.NullTime{Time: publishedAt, Valid: !publishedAt.IsZero()},
+			FeedID:      feed.ID,
+		})
+		if err != nil {
+			if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23505" {
+
+			} else {
+				fmt.Printf("Failed to create post for '%s': %v\n", item.Title, err)
+			}
+		}
+	}
+	return nil
+}
+
+func HandlerBrowsePostsLogged(s *State, cmd Command, user database.User) error {
+	limit := 2
+	if len(cmd.Args) >= 1 {
+		if parsedLimit, err := strconv.Atoi(cmd.Args[0]); err == nil {
+			limit = parsedLimit
+		}
+	}
+
+	posts, err := s.DB.GetPostsForUSer(context.Background(), database.GetPostsForUSerParams{
+		UserID: user.ID,
+		Limit:  int32(limit),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to get posts for user: %w", err)
+	}
+
+	if len(posts) == 0 {
+		fmt.Println("No posts found.")
+		return nil
+	}
+
+	for _, post := range posts {
+		publishedAt := "N/A"
+		if post.PublishedAt.Valid {
+			publishedAt = post.PublishedAt.Time.Format(time.RFC3339)
+		}
+		fmt.Printf("Title: %s\nURL: %s\n Published: %s\n\n", post.Title, post.Url, publishedAt)
 	}
 	return nil
 }

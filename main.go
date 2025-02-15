@@ -47,6 +47,7 @@ func main() {
 	commands.Register("follow", cli.MiddlewareLoggedIn(cli.HandlerFollowLogged))
 	commands.Register("following", cli.MiddlewareLoggedIn(cli.HandlerFollowingLogged))
 	commands.Register("unfollow", cli.MiddlewareLoggedIn(cli.HandlerUnfollowLogged))
+	commands.Register("browse", cli.MiddlewareLoggedIn(cli.HandlerBrowsePostsLogged))
 
 	cmd := cli.Command{
 		Name: os.Args[1],
