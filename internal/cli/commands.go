@@ -80,6 +80,18 @@ func HandlerRegister(s *State, cmd Command) error {
 	return nil
 }
 
+func MiddlewareLoggedIn(
+	handler func(s *State, cmd Command, user database.User) error,
+) func(s *State, cmd Command) error {
+	return func(s *State, cmd Command) error {
+		user, err := s.DB.GetUser(context.Background(), s.Config.CurrentUserName)
+		if err != nil {
+			return fmt.Errorf("failed to retrieve logged-in user: %w", err)
+		}
+		return handler(s, cmd, user)
+	}
+}
+
 func HandlerLogin(s *State, cmd Command) error {
 	if len(cmd.Args) < 1 {
 		return errors.New("username is required")
@@ -141,21 +153,13 @@ func HandlerAgg(s *State, cmd Command) error {
 	return nil
 }
 
-func HandlerAddFeed(s *State, cmd Command) error {
+func HandlerAddFeedLogged(s *State, cmd Command, user database.User) error {
 	if len(cmd.Args) < 2 {
 		return errors.New("feed name and URL are required")
 	}
 
 	feedName := cmd.Args[0]
 	feedURL := cmd.Args[1]
-
-	user, err := s.DB.GetUser(context.Background(), s.Config.CurrentUserName)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return fmt.Errorf("current user %s not found", s.Config.CurrentUserName)
-		}
-		return err
-	}
 
 	now := time.Now()
 	newFeed, err := s.DB.CreateFeed(context.Background(), database.CreateFeedParams{
@@ -178,7 +182,7 @@ func HandlerAddFeed(s *State, cmd Command) error {
 		FeedID:    newFeed.ID,
 	})
 	if err != nil {
-		return fmt.Errorf("failed tot automatically follow feed: %w", err)
+		return fmt.Errorf("failed to automatically follow feed: %w", err)
 	}
 
 	fmt.Printf("Feed created successfully: %+v\n", newFeed)
@@ -202,7 +206,7 @@ func HandlerFeeds(s *State, cmd Command) error {
 	return nil
 }
 
-func HandlerFollow(s *State, cmd Command) error {
+func HandlerFollowLogged(s *State, cmd Command, user database.User) error {
 	if len(cmd.Args) < 1 {
 		return errors.New("feed URL is required")
 	}
@@ -211,11 +215,6 @@ func HandlerFollow(s *State, cmd Command) error {
 	feed, err := s.DB.GetFeedByURL(context.Background(), feedURL)
 	if err != nil {
 		return fmt.Errorf("failed to find feed with URL %s: %w", feedURL, err)
-	}
-
-	user, err := s.DB.GetUser(context.Background(), s.Config.CurrentUserName)
-	if err != nil {
-		return fmt.Errorf("current user not found: %w", err)
 	}
 
 	now := time.Now()
@@ -234,12 +233,7 @@ func HandlerFollow(s *State, cmd Command) error {
 	return nil
 }
 
-func HandlerFollowing(s *State, cmd Command) error {
-	user, err := s.DB.GetUser(context.Background(), s.Config.CurrentUserName)
-	if err != nil {
-		return fmt.Errorf("current user not found: %w", err)
-	}
-
+func HandlerFollowingLogged(s *State, cmd Command, user database.User) error {
 	follows, err := s.DB.GetFeedFollowsForUser(context.Background(), user.ID)
 	if err != nil {
 		return fmt.Errorf("failed to get feed follows: %w", err)
