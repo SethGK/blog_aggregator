@@ -142,15 +142,25 @@ func HandlerUsers(s *State, cmd Command) error {
 }
 
 func HandlerAgg(s *State, cmd Command) error {
-	feedURL := "https://www.wagslane.dev/index.xml"
-
-	feed, err := aggregator.FetchFeed(context.Background(), feedURL)
+	if len(cmd.Args) < 1 {
+		return errors.New("time_between_reqs is required (e.g., 1m)")
+	}
+	durationStr := cmd.Args[0]
+	timeBetweenReqs, err := time.ParseDuration(durationStr)
 	if err != nil {
-		return fmt.Errorf("failed to fetch RSS feed: %w", err)
+		return fmt.Errorf("invalid duration: %w", err)
 	}
 
-	fmt.Printf("%+v\n", feed)
-	return nil
+	fmt.Printf("Collecting feeds every %s\n", timeBetweenReqs)
+	ticker := time.NewTicker(timeBetweenReqs)
+	defer ticker.Stop()
+
+	for {
+		if err := scrapeFeeds(s); err != nil {
+			fmt.Printf("Error scraping feeds: %v\n", err)
+		}
+		<-ticker.C
+	}
 }
 
 func HandlerAddFeedLogged(s *State, cmd Command, user database.User) error {
@@ -265,5 +275,33 @@ func HandlerUnfollowLogged(s *State, cmd Command, user database.User) error {
 		return fmt.Errorf("failed to unfollow feed: %w", err)
 	}
 	fmt.Printf("User %s unfollowed feed with URL %s\n", user.Name, feedURL)
+	return nil
+}
+
+func scrapeFeeds(s *State) error {
+	ctx := context.Background()
+
+	feed, err := s.DB.GetNextFeedToFetch(ctx)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			fmt.Println("No feed to fetch.")
+			return nil
+		}
+		return fmt.Errorf("failed to get next feed: %w", err)
+	}
+
+	if err := s.DB.MarkedFeedFetched(ctx, feed.ID); err != nil {
+		return fmt.Errorf("failed tot mark feed fetched: %w", err)
+	}
+
+	rssFeed, err := aggregator.FetchFeed(ctx, feed.Url)
+	if err != nil {
+		return fmt.Errorf("failed to fetch feed: %w", err)
+	}
+
+	fmt.Printf("Feed: %s\n", feed.Name)
+	for _, item := range rssFeed.Channel.Item {
+		fmt.Printf(" - %s\n", item.Title)
+	}
 	return nil
 }
