@@ -250,3 +250,20 @@ func HandlerFollowingLogged(s *State, cmd Command, user database.User) error {
 	}
 	return nil
 }
+
+func HandlerUnfollowLogged(s *State, cmd Command, user database.User) error {
+	if len(cmd.Args) < 1 {
+		return errors.New("feed URL is required")
+	}
+	feedURL := cmd.Args[0]
+
+	err := s.DB.DeleteFeedFollow(context.Background(), database.DeleteFeedFollowParams{
+		UserID: user.ID,
+		Url:    feedURL,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to unfollow feed: %w", err)
+	}
+	fmt.Printf("User %s unfollowed feed with URL %s\n", user.Name, feedURL)
+	return nil
+}
